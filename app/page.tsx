@@ -15,11 +15,6 @@ const MACHINES = [
   { key: "pc200t", label: "PC200t", slug: "pc200t" },
 ];
 
-const BULAN_NAMES = [
-  "Januari","Februari","Maret","April","Mei","Juni",
-  "Juli","Agustus","September","Oktober","November","Desember"
-];
-
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [periodMode, setPeriodMode] = useState<"harian" | "bulanan" | "tahunan">("harian");
@@ -31,6 +26,7 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [paretoDowntime, setParetoDowntime] = useState<any[]>([]);
   const [fleetTop10, setFleetTop10] = useState<any[]>([]);
+  const [downtimeKategori, setDowntimeKategori] = useState<any[]>([]);
   const [machineDataMap, setMachineDataMap] = useState<Record<string, any>>({});
   const [lineAktif, setLineAktif] = useState(0);
   const [machinesTanpaTarget, setMachinesTanpaTarget] = useState<string[]>([]);
@@ -113,7 +109,6 @@ export default function DashboardPage() {
         .gte("tanggal", startDate).lte("tanggal", endDate);
       if (safetyRes.data) safetyList = safetyRes.data;
       const accidentCount = safetyList.filter((s: any) => s.kategori === "ACCIDENT").length;
-      // Days without accident: days since last accident date, or total period days
       const totalPeriodDays = periodMode === "harian" ? 1
         : Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1;
       setSafety({
@@ -204,6 +199,8 @@ export default function DashboardPage() {
 
       if (dtList.length > 0) {
         const dtAgg: Record<string, number> = {};
+        const katAgg: Record<string, number> = {};
+
         dtList.forEach((d: any) => {
           let mnt = d.durasi_menit || d.durasi || 0;
           if (!mnt && d.waktu_awal && d.waktu_akhir) {
@@ -215,6 +212,9 @@ export default function DashboardPage() {
           }
           const probKey = d.problem || d.deskripsi || d.kategori || "Unspecified";
           dtAgg[probKey] = (dtAgg[probKey] || 0) + mnt;
+
+          const katKey = d.kategori || "MESIN";
+          katAgg[katKey] = (katAgg[katKey] || 0) + mnt;
         });
 
         const sortedPareto = Object.entries(dtAgg)
@@ -225,6 +225,14 @@ export default function DashboardPage() {
           .sort((a, b) => b.menit - a.menit)
           .slice(0, 5);
         setParetoDowntime(sortedPareto);
+
+        const sortedKategori = Object.entries(katAgg)
+          .map(([kategori, menit]) => ({
+            kategori, menit,
+            pct: totalDowntime > 0 ? (menit / totalDowntime) * 100 : 0,
+          }))
+          .sort((a, b) => b.menit - a.menit);
+        setDowntimeKategori(sortedKategori);
 
         const top10 = [...dtList]
           .map((d: any) => {
@@ -243,6 +251,7 @@ export default function DashboardPage() {
       } else {
         setParetoDowntime([]);
         setFleetTop10([]);
+        setDowntimeKategori([]);
       }
 
       // Compute GSPH & OEE per machine
@@ -266,8 +275,7 @@ export default function DashboardPage() {
       const qual = totalStroke > 0 ? Math.max(0, Math.round(100 - (totalNG / totalStroke) * 100)) : 100;
       const oeeVal = Math.round((perfFact / 100) * (avail / 100) * (qual / 100) * 100);
 
-      // NG value: estimate based on average part price
-      const ngValueRp = totalNG * 5000; // placeholder: Rp 5.000/pcs
+      const ngValueRp = totalNG * 5000;
 
       setTotals({
         gsph: calcGsph, targetGsph: calcTargetGsph,
@@ -360,7 +368,7 @@ export default function DashboardPage() {
       {loading ? (
         <p className="empty-state">Memuat data...</p>
       ) : (
-        <div>
+        <div className="dash-body">
           {/* Warning: machines without target */}
           {machinesTanpaTarget.length > 0 && (
             <div className="error-msg">
@@ -385,167 +393,192 @@ export default function DashboardPage() {
             periodMode={periodMode}
           />
 
-          {/* ══ TV Grid: Charts Row ══ */}
-          <div className="dash-main-grid" style={{ marginBottom: "18px" }}>
-            {/* Pareto Downtime */}
-            <div className="dash-panel">
-              <p className="dash-panel-title">Pareto Downtime (Menit)</p>
-              {paretoDowntime.length > 0 ? (
-                <div>
-                  {paretoDowntime.map((row) => (
-                    <div className="pareto-row" key={row.problem}>
-                      <span className="pareto-label" title={row.problem}>{row.problem}</span>
-                      <div className="pareto-bar-track">
-                        <div className="pareto-bar-fill" style={{ width: `${row.pct}%` }} />
+          {/* ══ Grid TV (2 baris x 3 kolom) ══ */}
+          <div className="tv-grid">
+            {/* Baris 1: Trend GSPH | Pareto Downtime | Line Status Table */}
+            <div className="dash-main-grid tv-row-1">
+              {/* Trend GSPH Summary */}
+              <div className="dash-panel">
+                <p className="dash-panel-title">
+                  Trend GSPH per {periodMode === "harian" ? "Jam" : periodMode === "bulanan" ? "Hari" : "Bulan"}
+                </p>
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
+                  <span style={{ fontSize: "36px", fontWeight: 700, color: "var(--primary)" }}>
+                    {fmtNum(totals.gsph)}
+                  </span>
+                  <span style={{ fontSize: "12px", color: "var(--muted)" }}>
+                    Target: {fmtNum(totals.targetGsph)} GSPH
+                  </span>
+                </div>
+              </div>
+
+              {/* Pareto Downtime */}
+              <div className="dash-panel">
+                <p className="dash-panel-title">Pareto Downtime (Menit)</p>
+                {paretoDowntime.length > 0 ? (
+                  <div>
+                    {paretoDowntime.map((row) => (
+                      <div className="pareto-row" key={row.problem}>
+                        <span className="pareto-label" title={row.problem}>{row.problem}</span>
+                        <div className="pareto-bar-track">
+                          <div className="pareto-bar-fill" style={{ width: `${row.pct}%` }} />
+                        </div>
+                        <span className="pareto-val">
+                          {fmtNum(row.menit)} ({fmtNum(row.pct)}%)
+                        </span>
                       </div>
-                      <span className="pareto-val">
-                        {fmtNum(row.menit)} ({fmtNum(row.pct)}%)
+                    ))}
+                  </div>
+                ) : (
+                  <p className="empty-state">Tidak ada downtime.</p>
+                )}
+              </div>
+
+              {/* Line Status Table */}
+              <div className="dash-panel">
+                <p className="dash-panel-title">Line Status</p>
+                <div className="table-wrap">
+                  <table className="table-compact">
+                    <thead>
+                      <tr>
+                        <th>Line</th>
+                        <th>Stroke</th>
+                        <th>Target</th>
+                        <th>Actual</th>
+                        <th>Perf</th>
+                        <th>OEE</th>
+                        <th>DT</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {MACHINES.map((m) => {
+                        const data = machineDataMap[m.key] || {
+                          stroke: 0, gsph: 0, ng: 0, downtime: 0, status: "OFFLINE",
+                          targetGsph: 0, performanceFactor: 0, oee: 0,
+                        };
+                        return (
+                          <tr key={m.key}>
+                            <td>
+                              <Link href={`/machines/${m.slug}`} style={{ fontWeight: 700, color: "var(--primary)", textDecoration: "none" }}>
+                                {m.label}
+                              </Link>
+                            </td>
+                            <td className="mono">{fmtNum(data.stroke)}</td>
+                            <td className="mono">{fmtNum(data.targetGsph)}</td>
+                            <td className="mono">{fmtNum(data.gsph)}</td>
+                            <td className="mono">{fmtNum(data.performanceFactor)}%</td>
+                            <td className="mono">{fmtNum(data.oee)}%</td>
+                            <td className="mono">{fmtNum(data.downtime)}m</td>
+                            <td>
+                              <span className={`status-badge ${statusClass(data)}`}>
+                                {statusLabel(data)}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* Baris 2 (tv-row-3): Downtime Kategori | 10 Downtime Terburuk | OEE Breakdown */}
+            <div className="dash-main-grid tv-row-3">
+              {/* Downtime Kategori */}
+              <div className="dash-panel">
+                <p className="dash-panel-title">Downtime per Kategori</p>
+                {downtimeKategori.length > 0 ? (
+                  <div>
+                    {downtimeKategori.map((row) => (
+                      <div className="pareto-row" key={row.kategori}>
+                        <span className="pareto-label" title={row.kategori}>{row.kategori}</span>
+                        <div className="pareto-bar-track">
+                          <div className="pareto-bar-fill" style={{ width: `${row.pct}%`, background: "var(--teal)" }} />
+                        </div>
+                        <span className="pareto-val">
+                          {fmtNum(row.menit)} mnt
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="empty-state">Tidak ada downtime.</p>
+                )}
+              </div>
+
+              {/* 10 Downtime Terburuk */}
+              <div className="dash-panel">
+                <p className="dash-panel-title">10 Downtime Terburuk</p>
+                <div className="table-wrap">
+                  <table className="table-compact">
+                    <thead>
+                      <tr>
+                        <th>Line</th>
+                        <th>Kategori</th>
+                        <th>Problem</th>
+                        <th>Menit</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fleetTop10.map((row, idx) => (
+                        <tr key={idx}>
+                          <td><span className="badge">{row.mesinLabel}</span></td>
+                          <td>{row.kategori}</td>
+                          <td style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.problem}</td>
+                          <td className="mono">{fmtNum(row.menit)}</td>
+                        </tr>
+                      ))}
+                      {fleetTop10.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="empty-state">Tidak ada downtime.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* OEE Breakdown */}
+              <div className="dash-panel">
+                <p className="dash-panel-title">OEE Breakdown</p>
+                <div className="oee-donut-row oee-donut-row-3">
+                  <div className="oee-donut-item">
+                    <div className="oee-donut-wrap" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <span style={{ fontSize: 18, fontWeight: 700 }}>{fmtNum(totals.availability)}%</span>
+                    </div>
+                    <div className="oee-donut-label">Availability</div>
+                  </div>
+                  <div className="oee-donut-item">
+                    <div className="oee-donut-wrap" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <span style={{ fontSize: 18, fontWeight: 700 }}>{fmtNum(totals.performanceFactor)}%</span>
+                    </div>
+                    <div className="oee-donut-label">Performance</div>
+                  </div>
+                  <div className="oee-donut-item">
+                    <div className="oee-donut-wrap" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <span style={{ fontSize: 18, fontWeight: 700 }}>
+                        {fmtNum(totals.stroke > 0 ? Math.max(0, 100 - ngRatePct) : 100)}%
                       </span>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="empty-state">Tidak ada downtime.</p>
-              )}
-            </div>
-
-            {/* OEE Breakdown summary */}
-            <div className="dash-panel">
-              <p className="dash-panel-title">OEE Breakdown</p>
-              <div className="oee-donut-row">
-                <div className="oee-donut-item">
-                  <div className="oee-donut-wrap" style={{ width: 84, height: 84, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <span style={{ fontSize: 22, fontWeight: 700 }}>{fmtNum(totals.availability)}%</span>
+                    <div className="oee-donut-label">Quality</div>
                   </div>
-                  <div className="oee-donut-label">Availability</div>
                 </div>
-                <div className="oee-donut-item">
-                  <div className="oee-donut-wrap" style={{ width: 84, height: 84, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <span style={{ fontSize: 22, fontWeight: 700 }}>{fmtNum(totals.performanceFactor)}%</span>
-                  </div>
-                  <div className="oee-donut-label">Performance</div>
+                <div className="oee-total-big">
+                  <span className="oee-total-big-value">{fmtNum(totals.oee)}%</span>
+                  <span className="oee-total-big-label">OEE Keseluruhan</span>
                 </div>
-                <div className="oee-donut-item">
-                  <div className="oee-donut-wrap" style={{ width: 84, height: 84, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <span style={{ fontSize: 22, fontWeight: 700 }}>
-                      {fmtNum(totals.stroke > 0 ? Math.max(0, 100 - ngRatePct) : 100)}%
-                    </span>
-                  </div>
-                  <div className="oee-donut-label">Quality</div>
-                </div>
-                <div className="oee-total">
-                  <div className="oee-total-value">{fmtNum(totals.oee)}%</div>
-                  <div className="oee-donut-label">OEE</div>
-                </div>
-              </div>
-              <p className="oee-kesimpulan">
-                {totals.oee >= 85
-                  ? "✅ OEE dalam kondisi baik. Pertahankan performa ini."
-                  : totals.oee >= 65
-                  ? "⚠️ OEE perlu perhatian. Cek availability & downtime."
-                  : "🔴 OEE rendah. Segera investigasi penyebab utama."}
-              </p>
-            </div>
-
-            {/* Fleet Quick Stats */}
-            <div className="dash-panel">
-              <p className="dash-panel-title">Fleet Summary</p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div className="perf-card" style={{ borderTop: "3px solid var(--primary)" }}>
-                  <div className="perf-label">Line Aktif</div>
-                  <div className="perf-value">{lineAktif} / {MACHINES.length}</div>
-                </div>
-                <div className="perf-card" style={{ borderTop: "3px solid var(--teal)" }}>
-                  <div className="perf-label">Total Stroke</div>
-                  <div className="perf-value">{fmtNum(totals.stroke)}</div>
-                </div>
-                <div className="perf-card" style={{ borderTop: "3px solid var(--red)" }}>
-                  <div className="perf-label">Total Downtime</div>
-                  <div className="perf-value">{fmtNum(totals.downtimeMenit)} mnt</div>
-                </div>
+                <p className="oee-kesimpulan">
+                  {totals.oee >= 85
+                    ? "✅ OEE dalam kondisi baik. Pertahankan performa ini."
+                    : totals.oee >= 65
+                    ? "⚠️ OEE perlu perhatian. Cek availability & downtime."
+                    : "🔴 OEE rendah. Segera investigasi penyebab utama."}
+                </p>
               </div>
             </div>
           </div>
-
-          {/* ══ Line Status Table ══ */}
-          <div className="dash-panel" style={{ marginBottom: "18px" }}>
-            <p className="dash-panel-title">Line Status</p>
-            <div className="table-wrap">
-              <table className="table-compact">
-                <thead>
-                  <tr>
-                    <th>Line</th>
-                    <th>Stroke</th>
-                    <th>Target GSPH</th>
-                    <th>Actual GSPH</th>
-                    <th>NG</th>
-                    <th>Performance</th>
-                    <th>OEE</th>
-                    <th>Downtime</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {MACHINES.map((m) => {
-                    const data = machineDataMap[m.key] || {
-                      stroke: 0, gsph: 0, ng: 0, downtime: 0, status: "OFFLINE",
-                      targetGsph: 0, performanceFactor: 0, oee: 0,
-                    };
-                    return (
-                      <tr key={m.key}>
-                        <td>
-                          <Link href={`/machines/${m.slug}`} style={{ fontWeight: 700, color: "var(--primary)", textDecoration: "none" }}>
-                            {m.label}
-                          </Link>
-                        </td>
-                        <td className="mono">{fmtNum(data.stroke)}</td>
-                        <td className="mono">{fmtNum(data.targetGsph)}</td>
-                        <td className="mono">{fmtNum(data.gsph)}</td>
-                        <td className="mono">{fmtNum(data.ng)}</td>
-                        <td className="mono">{fmtNum(data.performanceFactor)}%</td>
-                        <td className="mono">{fmtNum(data.oee)}%</td>
-                        <td className="mono">{fmtNum(data.downtime)} mnt</td>
-                        <td>
-                          <span className={`status-badge ${statusClass(data)}`}>
-                            {statusLabel(data)}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* ══ Top 10 Downtime ══ */}
-          {fleetTop10.length > 0 && (
-            <div className="dash-panel">
-              <p className="dash-panel-title">Top Downtime Terburuk</p>
-              <div className="table-wrap" style={{ maxHeight: 220 }}>
-                <table className="table-compact">
-                  <thead>
-                    <tr>
-                      <th>Line</th>
-                      <th>Kategori</th>
-                      <th>Problem</th>
-                      <th>Menit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {fleetTop10.map((row, idx) => (
-                      <tr key={idx}>
-                        <td><span className="badge">{row.mesinLabel}</span></td>
-                        <td>{row.kategori}</td>
-                        <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.problem}</td>
-                        <td className="mono">{fmtNum(row.menit)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </HeaderNav>
