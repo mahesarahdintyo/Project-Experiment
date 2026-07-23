@@ -31,6 +31,7 @@ export default function DashboardPage() {
   const [machineDataMap, setMachineDataMap] = useState<Record<string, any>>({});
   const [lineAktif, setLineAktif] = useState(0);
   const [machinesTanpaTarget, setMachinesTanpaTarget] = useState<string[]>([]);
+  const [dbStatusMsg, setDbStatusMsg] = useState<string | null>(null);
 
   const [totals, setTotals] = useState({
     gsph: 0, targetGsph: 0, performanceFactor: 0,
@@ -54,6 +55,15 @@ export default function DashboardPage() {
 
   const [theme, setTheme] = useState<"light" | "dark">("dark");
 
+  // Chart Canvas Refs
+  const hourlyCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const fleetCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const donutAvailRef = useRef<HTMLCanvasElement | null>(null);
+  const donutPerfRef = useRef<HTMLCanvasElement | null>(null);
+  const donutQualRef = useRef<HTMLCanvasElement | null>(null);
+
+  const chartInstances = useRef<Record<string, Chart>>({});
+
   useEffect(() => {
     const saved = (localStorage.getItem("theme_v1") as "light" | "dark") || "dark";
     setTheme(saved);
@@ -74,18 +84,11 @@ export default function DashboardPage() {
     window.dispatchEvent(new Event("themeChange"));
   };
 
-  // Chart Canvas Refs
-  const hourlyCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const fleetCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const donutAvailRef = useRef<HTMLCanvasElement | null>(null);
-  const donutPerfRef = useRef<HTMLCanvasElement | null>(null);
-  const donutQualRef = useRef<HTMLCanvasElement | null>(null);
-
-  const chartInstances = useRef<Record<string, Chart>>({});
-
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
+    setDbStatusMsg(null);
     try {
+      // 1. Profile
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         const { data: profData } = await supabase
@@ -93,6 +96,7 @@ export default function DashboardPage() {
         if (profData) setProfile(profData as Profile);
       }
 
+      // 2. Filter Date
       let startDate = tanggal;
       let endDate = tanggal;
       if (periodMode === "bulanan") {
@@ -105,6 +109,7 @@ export default function DashboardPage() {
         endDate = `${tahunPilih}-12-31`;
       }
 
+      // 3. Fetch Production Log
       let prodList: any[] = [];
       let prodQ = supabase.from("production_log").select("*")
         .gte("tanggal", startDate).lte("tanggal", endDate);
@@ -118,6 +123,7 @@ export default function DashboardPage() {
       }
       if (prodRes.data) prodList = prodRes.data;
 
+      // 4. Fetch Downtime Log
       let dtList: any[] = [];
       let dtQ = supabase.from("downtime_log").select("*")
         .gte("tanggal", startDate).lte("tanggal", endDate);
@@ -131,40 +137,55 @@ export default function DashboardPage() {
       }
       if (dtRes.data) dtList = dtRes.data;
 
-      let safetyList: any[] = [];
-      const safetyRes = await supabase.from("safety_log").select("*")
-        .gte("tanggal", startDate).lte("tanggal", endDate);
-      if (safetyRes.data) safetyList = safetyRes.data;
-      const accidentCount = safetyList.filter((s: any) => s.kategori === "ACCIDENT").length;
-      const totalPeriodDays = periodMode === "harian" ? 1
-        : Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1;
-      setSafety({
-        accident: accidentCount,
-        hariTanpaAccident: accidentCount === 0 ? 843 : 0, // matches screenshot
-      });
+      // 5. Fetch Safety Log
+      let accidentCount = 0;
+      let daysWithoutAccident = 0;
+      try {
+        const safetyRes = await supabase.from("safety_log").select("*")
+          .gte("tanggal", startDate).lte("tanggal", endDate);
+        if (safetyRes.data) {
+          accidentCount = safetyRes.data.filter((s: any) => s.kategori === "ACCIDENT").length;
+          const totalPeriodDays = periodMode === "harian" ? 1
+            : Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1;
+          daysWithoutAccident = accidentCount === 0 ? totalPeriodDays : 0;
+        }
+      } catch {
+        // Table not created yet
+      }
+      setSafety({ accident: accidentCount, hariTanpaAccident: daysWithoutAccident });
 
-      const scrapYear = periodMode === "tahunan" ? tahunPilih : new Date(endDate).getFullYear();
-      const scrapMonth = periodMode === "tahunan" ? new Date().getMonth() + 1 : new Date(endDate).getMonth() + 1;
-      const scrapRes = await supabase.from("scrap_top_end").select("*")
-        .eq("tahun", scrapYear).eq("bulan", scrapMonth).maybeSingle();
-      if (scrapRes.data) {
-        setScrapValueRp((scrapRes.data.scrap_value_kidr || 0) * 1000);
-      } else {
+      // 6. Fetch Scrap
+      try {
+        const scrapYear = periodMode === "tahunan" ? tahunPilih : new Date(endDate).getFullYear();
+        const scrapMonth = periodMode === "tahunan" ? new Date().getMonth() + 1 : new Date(endDate).getMonth() + 1;
+        const scrapRes = await supabase.from("scrap_top_end").select("*")
+          .eq("tahun", scrapYear).eq("bulan", scrapMonth).maybeSingle();
+        if (scrapRes.data) {
+          setScrapValueRp((scrapRes.data.scrap_value_kidr || 0) * 1000);
+        } else {
+          setScrapValueRp(0);
+        }
+      } catch {
         setScrapValueRp(0);
       }
 
+      // 7. Fetch Attendance
       let attList: any[] = [];
-      let attQ = supabase.from("attendance_log").select("*")
-        .gte("tanggal", startDate).lte("tanggal", endDate);
-      if (shiftFilter !== "all") attQ = attQ.eq("shift", Number(shiftFilter));
-      let attRes = await attQ;
-      if (attRes.error) {
-        let attQ2 = supabase.from("absensi_v2").select("*")
+      try {
+        let attQ = supabase.from("attendance_log").select("*")
           .gte("tanggal", startDate).lte("tanggal", endDate);
-        if (shiftFilter !== "all") attQ2 = attQ2.eq("shift", Number(shiftFilter));
-        attRes = await attQ2;
+        if (shiftFilter !== "all") attQ = attQ.eq("shift", Number(shiftFilter));
+        let attRes = await attQ;
+        if (attRes.error) {
+          let attQ2 = supabase.from("absensi_v2").select("*")
+            .gte("tanggal", startDate).lte("tanggal", endDate);
+          if (shiftFilter !== "all") attQ2 = attQ2.eq("shift", Number(shiftFilter));
+          attRes = await attQ2;
+        }
+        if (attRes.data) attList = attRes.data;
+      } catch {
+        attList = [];
       }
-      if (attRes.data) attList = attRes.data;
 
       if (attList.length > 0) {
         const totOrang = attList.reduce((s: number, a: any) => s + (a.total_orang || 0), 0);
@@ -174,7 +195,7 @@ export default function DashboardPage() {
         const totOT = attList.reduce((s: number, a: any) => s + (a.overtime_jam || 0), 0);
         const pctExclCuti = (totOrang - totCuti) > 0
           ? Math.min(100, Math.round((totHadir / (totOrang - totCuti)) * 1000) / 10)
-          : 80.8;
+          : 0;
         setAttendance({
           pctExclCuti,
           total_orang: periodMode === "harian" ? totOrang : Math.round(totOrang / attList.length),
@@ -184,9 +205,10 @@ export default function DashboardPage() {
           overtime_jam: periodMode === "harian" ? totOT : Math.round(totOT / attList.length * 10) / 10,
         });
       } else {
-        setAttendance({ pctExclCuti: 80.8, total_orang: 26, hadir: 21, cuti: 4, absen: 1, overtime_jam: 0 });
+        setAttendance({ pctExclCuti: 0, total_orang: 0, hadir: 0, cuti: 0, absen: 0, overtime_jam: 0 });
       }
 
+      // 8. Compute production totals
       let totalOK = 0, totalNG = 0, totalStroke = 0;
       let totalDowntime = 0, totalDandori = 0;
       let activeLinesCount = 0;
@@ -292,9 +314,9 @@ export default function DashboardPage() {
       });
 
       const calcGsph = Math.round(totalStroke / (workMins / 60));
-      const calcTargetGsph = 911.8; // match screenshot target
+      const calcTargetGsph = 0;
       const perfFact = calcTargetGsph > 0 ? Math.min(100, Math.round((calcGsph / calcTargetGsph) * 100)) : 0;
-      const avail = Math.max(0, Math.round(100 - (totalDowntime / (workMins * MACHINES.length)) * 100));
+      const avail = totalStroke > 0 || totalDowntime > 0 ? Math.max(0, Math.round(100 - (totalDowntime / (workMins * MACHINES.length)) * 100)) : 0;
       const qual = totalStroke > 0 ? Math.max(0, Math.round(100 - (totalNG / totalStroke) * 100)) : 0;
       const oeeVal = Math.round((perfFact / 100) * (avail / 100) * (qual / 100) * 100);
 
@@ -311,6 +333,10 @@ export default function DashboardPage() {
 
       setMachineDataMap(perMachineMap);
       setLineAktif(activeLinesCount);
+
+      if (prodList.length === 0 && dtList.length === 0 && attList.length === 0) {
+        setDbStatusMsg("💡 Supabase terhubung! Belum ada data untuk periode tanggal ini. Silakan input data di menu Input Produksi/Attendance/Scrap/Safety.");
+      }
     } catch (err: any) {
       console.error("Dashboard error detail:", err?.message || JSON.stringify(err) || err);
     } finally {
@@ -508,10 +534,27 @@ export default function DashboardPage() {
       </div>
 
       {loading ? (
-        <p className="empty-state">Memuat data...</p>
+        <p className="empty-state">Memuat data dari Supabase...</p>
       ) : (
         <div className="dash-body">
-          {/* ══ 5 Kolom SQCPM (dengan mini line chart sparklines) ══ */}
+          {/* Status Message Info */}
+          {dbStatusMsg && (
+            <div className="offline-banner" style={{ marginBottom: 12 }}>
+              {dbStatusMsg}
+            </div>
+          )}
+
+          {/* Warning: machines without target */}
+          {machinesTanpaTarget.length > 0 && (
+            <div className="error-msg">
+              ⚠️ <b>Target GSPH belum diisi</b> untuk:{" "}
+              <span>{machinesTanpaTarget.join(", ")}</span>.
+              Akibatnya <b>Performance &amp; OEE tampil 0%</b>.
+              Isi dulu di halaman mesin → tab <b>Master Data</b> → panel <b>Target GSPH</b> (khusus admin/leader).
+            </div>
+          )}
+
+          {/* ══ 5 Kolom SQCPM ══ */}
           <SQCDMPPanel
             safety={safety}
             ngRatePct={ngRatePct}
