@@ -2,7 +2,7 @@ export interface Profile {
   id: string;
   email?: string;
   full_name?: string;
-  role?: "admin" | "operator" | string;
+  role?: "admin" | "leader" | "operator" | string;
 }
 
 export interface ExtraField {
@@ -35,6 +35,7 @@ export interface MasterPart {
   ct_detik?: number;
   mp_std?: number;
   next_process?: string;
+  harga_rp?: number;
 }
 
 export interface ProductionRecord {
@@ -89,11 +90,31 @@ export interface NonProduksiRecord {
 export interface AttendanceRecord {
   id?: string;
   tanggal: string;
-  shift: number;
-  mesin: string;
-  mp_hadir: number;
-  mp_absent?: number;
+  shift?: number;
+  total_orang: number;
+  hadir: number;
+  cuti?: number;
+  absen: number;
+  overtime_jam?: number;
   catatan?: string;
+  created_at?: string;
+}
+
+export interface SafetyRecord {
+  id?: string;
+  tanggal: string;
+  kategori: "ACCIDENT" | "NEAR_MISS" | "OTHER" | string;
+  keterangan?: string;
+  created_at?: string;
+}
+
+export interface ScrapRecord {
+  id?: string;
+  tahun: number;
+  bulan: number;
+  scrap_value_kidr: number;
+  total_value_kidr?: number;
+  target_rasio?: number;
   created_at?: string;
 }
 

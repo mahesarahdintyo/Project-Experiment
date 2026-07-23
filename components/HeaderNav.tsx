@@ -6,20 +6,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { Profile } from "@/types/database";
 
-const MACHINE_NAV = [
-  { href: "/", label: "Dashboard", icon: "🏠" },
-  { href: "/machines/tandem", label: "Tandem", icon: "⚙️" },
-  { href: "/machines/blanking", label: "Blanking", icon: "⚙️" },
-  { href: "/machines/transfer-2000t", label: "Transfer 2000t", icon: "⚙️" },
-  { href: "/machines/transfer-800t", label: "Transfer 800t", icon: "⚙️" },
-  { href: "/machines/pc200t", label: "PC200t", icon: "⚙️" },
-];
-
 interface HeaderNavProps {
   children: React.ReactNode;
+  profile?: Profile | null;
+  activeTitle?: string;
 }
 
-export default function HeaderNav({ children }: HeaderNavProps) {
+export default function HeaderNav({ children, activeTitle }: HeaderNavProps) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -30,25 +23,20 @@ export default function HeaderNav({ children }: HeaderNavProps) {
   const [userEmail, setUserEmail] = useState<string>("");
 
   useEffect(() => {
-    // Theme sync
     const savedTheme = (localStorage.getItem("theme_v1") as "light" | "dark") || "light";
     setTheme(savedTheme);
     document.documentElement.setAttribute("data-theme", savedTheme);
 
-    // Auth check
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         setUserEmail(session.user.email || "");
-        // fetch profile
         const { data } = await supabase
           .from("profiles")
           .select("*")
           .eq("id", session.user.id)
           .single();
-        if (data) {
-          setProfile(data as Profile);
-        }
+        if (data) setProfile(data as Profile);
       }
     };
     checkUser();
@@ -66,6 +54,13 @@ export default function HeaderNav({ children }: HeaderNavProps) {
     router.push("/login");
   };
 
+  const isLeaderOrAdmin = profile && ["admin", "leader"].includes(profile.role || "");
+
+  const isActive = (href: string) => {
+    if (href === "/") return pathname === "/";
+    return pathname.startsWith(href);
+  };
+
   return (
     <div className="app-shell">
       {/* Mobile Topbar */}
@@ -73,8 +68,8 @@ export default function HeaderNav({ children }: HeaderNavProps) {
         <button className="hamburger" onClick={() => setMobileNavOpen(true)}>
           ☰
         </button>
-        <span className="mobile-title">Stamping Production System</span>
-        <button className="theme-toggle ml-auto" onClick={toggleTheme}>
+        <span className="mobile-title">{activeTitle || "Press Shop System"}</span>
+        <button className="theme-toggle" style={{ marginLeft: "auto" }} onClick={toggleTheme}>
           {theme === "dark" ? "☀️" : "🌙"}
         </button>
       </div>
@@ -108,48 +103,78 @@ export default function HeaderNav({ children }: HeaderNavProps) {
         )}
 
         <nav className="sidebar-nav" onClick={() => setMobileNavOpen(false)}>
-          {MACHINE_NAV.map((item) => {
-            const isActive = pathname === item.href;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`sidebar-link ${isActive ? "active" : ""}`}
-              >
-                <span>{item.icon}</span>
-                {!sidebarCollapsed && <span>{item.label}</span>}
-              </Link>
-            );
-          })}
+          {/* Dashboard */}
+          <Link
+            href="/"
+            className={`sidebar-link ${isActive("/") ? "active" : ""}`}
+            title="Dashboard"
+          >
+            <span>🏠</span>
+            {!sidebarCollapsed && <span>Dashboard</span>}
+          </Link>
+
+          {/* Input Produksi — semua user */}
+          <Link
+            href="/input-produksi"
+            className={`sidebar-link ${isActive("/input-produksi") ? "active" : ""}`}
+            title="Input Produksi"
+          >
+            <span>⚙️</span>
+            {!sidebarCollapsed && <span>Input Produksi</span>}
+          </Link>
+
+          {/* Input Attendance — admin/leader */}
+          {isLeaderOrAdmin && (
+            <Link
+              href="/input-attendance"
+              className={`sidebar-link ${isActive("/input-attendance") ? "active" : ""}`}
+              title="Input Attendance"
+            >
+              <span>👥</span>
+              {!sidebarCollapsed && <span>Input Attendance</span>}
+            </Link>
+          )}
+
+          {/* Input Scrap — admin/leader */}
+          {isLeaderOrAdmin && (
+            <Link
+              href="/input-scrap"
+              className={`sidebar-link ${isActive("/input-scrap") ? "active" : ""}`}
+              title="Input Scrap"
+            >
+              <span>♻️</span>
+              {!sidebarCollapsed && <span>Input Scrap</span>}
+            </Link>
+          )}
+
+          {/* Input Safety — admin/leader */}
+          {isLeaderOrAdmin && (
+            <Link
+              href="/input-safety"
+              className={`sidebar-link ${isActive("/input-safety") ? "active" : ""}`}
+              title="Input Safety"
+            >
+              <span>⛑️</span>
+              {!sidebarCollapsed && <span>Input Safety</span>}
+            </Link>
+          )}
         </nav>
 
         {!sidebarCollapsed ? (
           <div className="sidebar-foot">
-            <div className="who">
-              {profile?.full_name || userEmail || "Operator"}
-            </div>
+            <div className="who">{profile?.full_name || userEmail || "Operator"}</div>
             <span
-              className={`badge ${
-                profile?.role === "admin" ? "role-admin" : ""
-              }`}
+              className={`badge ${profile?.role === "admin" ? "role-admin" : ""}`}
             >
               {profile?.role || "user"}
             </span>
-            <div className="mt-2 flex gap-2 items-center">
-              <button
-                className="btn-ghost btn-sm flex-1"
-                onClick={handleLogout}
-              >
-                Keluar
-              </button>
-              <button
-                className="btn-ghost btn-sm"
-                onClick={toggleTheme}
-                title="Toggle Theme"
-              >
-                {theme === "dark" ? "☀️" : "🌙"}
-              </button>
-            </div>
+            <button
+              className="btn-ghost btn-sm"
+              style={{ marginTop: "10px", width: "100%" }}
+              onClick={handleLogout}
+            >
+              Keluar
+            </button>
           </div>
         ) : (
           <button

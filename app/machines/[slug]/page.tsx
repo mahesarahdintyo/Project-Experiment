@@ -368,7 +368,7 @@ export default function MachineDetailPage({ params }: PageProps) {
           className="btn-secondary flex items-center gap-2"
           onClick={() => setIsAttendanceOpen(true)}
         >
-          <span>👥</span> Attendance MP ({attendance ? `${attendance.mp_hadir || 0} Hadir` : "Belum diisi"})
+          <span>👥</span> Attendance MP ({attendance ? `${attendance.hadir || 0} Hadir` : "Belum diisi"})
         </button>
       </div>
 
