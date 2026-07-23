@@ -565,19 +565,19 @@ export default function DashboardPage() {
               <div className="dash-panel" style={{ display: "flex", flexDirection: "column" }}>
                 <p className="dash-panel-title">10 DOWNTIME TERBURUK</p>
                 <div className="table-wrap" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-                  <table className="table-compact" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+                  <table className="table-compact" style={{ width: "100%", height: "100%" }}>
                     <thead>
-                      <tr style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 2fr 1fr" }}>
-                        <th>LINE</th>
-                        <th>KATEGORI</th>
-                        <th>PROBLEM</th>
-                        <th>MENIT</th>
+                      <tr>
+                        <th style={{ width: "22%" }}>LINE</th>
+                        <th style={{ width: "25%" }}>KATEGORI</th>
+                        <th style={{ width: "38%" }}>PROBLEM</th>
+                        <th style={{ width: "15%" }}>MENIT</th>
                       </tr>
                     </thead>
-                    <tbody style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+                    <tbody>
                       {fleetTop10.length > 0 ? (
                         fleetTop10.map((row, idx) => (
-                          <tr key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 2fr 1fr" }}>
+                          <tr key={idx}>
                             <td><span className="badge">{row.mesinLabel}</span></td>
                             <td>{row.kategori}</td>
                             <td style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.problem}</td>
@@ -585,17 +585,15 @@ export default function DashboardPage() {
                           </tr>
                         ))
                       ) : (
-                        <tr style={{ flex: 1, display: "flex" }}>
+                        <tr>
                           <td
                             colSpan={4}
                             className="empty-state"
                             style={{
-                              flex: 1,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
+                              padding: "40px 10px",
+                              verticalAlign: "middle",
+                              textAlign: "center",
                               borderBottom: "1px solid var(--border)",
-                              margin: 0,
                             }}
                           >
                             Tidak ada downtime.
