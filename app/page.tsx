@@ -290,15 +290,17 @@ export default function DashboardPage() {
               display: true,
               position: "top",
               align: "end",
-              labels: { color: "#94a3b8", boxWidth: 8, boxHeight: 8, usePointStyle: true, font: { size: 10 } },
+              labels: { color: "#94a3b8", boxWidth: 8, boxHeight: 8, usePointStyle: true, pointStyle: "circle", font: { size: 10 } },
             },
           },
           scales: {
             x: { ticks: { display: false }, grid: { display: false }, border: { display: false } },
             y: {
-              ticks: { color: "#64748b", font: { size: 10 }, maxTicksLimit: 4 },
+              ticks: { color: "#64748b", font: { size: 10 }, stepSize: 0.5 },
               grid: { color: "#334155" },
+              border: { display: false },
               beginAtZero: true,
+              max: 1.0,
             },
           },
         },
@@ -325,38 +327,29 @@ export default function DashboardPage() {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: { position: "top", align: "end", labels: { color: "#94a3b8", boxWidth: 8, boxHeight: 8, usePointStyle: true, font: { size: 10 } } },
+            legend: {
+              position: "top",
+              align: "end",
+              labels: { color: "#94a3b8", boxWidth: 8, boxHeight: 8, usePointStyle: true, pointStyle: "circle", font: { size: 10 } },
+            },
           },
           scales: {
-            x: { stacked: true, ticks: { color: "#64748b", font: { size: 10 } }, grid: { display: false } },
-            y: { stacked: true, ticks: { color: "#64748b", font: { size: 10 }, maxTicksLimit: 4 }, grid: { color: "#334155" }, beginAtZero: true },
+            x: { stacked: true, ticks: { color: "#64748b", font: { size: 10 } }, grid: { display: false }, border: { display: false } },
+            y: {
+              stacked: true,
+              ticks: { color: "#64748b", font: { size: 10 }, stepSize: 0.5 },
+              grid: { color: "#334155" },
+              border: { display: false },
+              beginAtZero: true,
+              max: 1.0,
+            },
           },
         },
       });
     }
 
-    /* Donuts OEE — with center text % */
+    /* Donuts OEE */
     const getCssVar = (v: string) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-
-    const centerTextPlugin = {
-      id: "centerText",
-      afterDraw(chart: Chart) {
-        const { ctx, chartArea } = chart as any;
-        if (!chartArea) return;
-        const val = (chart.data.datasets[0]?.data?.[0] as number) || 0;
-        ctx.save();
-        ctx.font = "700 14px 'Inter', sans-serif";
-        ctx.fillStyle = getCssVar("--text");
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(
-          Math.round(val) + "%",
-          (chartArea.left + chartArea.right) / 2,
-          (chartArea.top + chartArea.bottom) / 2
-        );
-        ctx.restore();
-      },
-    };
 
     const renderDonut = (canvas: HTMLCanvasElement | null, id: string, val: number, color: string) => {
       if (!canvas) return;
@@ -371,7 +364,6 @@ export default function DashboardPage() {
           plugins: { legend: { display: false }, tooltip: { enabled: false } },
           ...(({ cutout: "72%" } as any)),
         },
-        plugins: [centerTextPlugin],
       });
     };
 

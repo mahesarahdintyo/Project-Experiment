@@ -1075,6 +1075,7 @@ td.mono, .mono { font-family: var(--font-mono); }
   min-width: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 .dash-panel-title {
   font-family: var(--font-mono);
@@ -1577,38 +1578,40 @@ table.table-compact .status-badge { font-size: 9px; padding: 2px 7px; }
 }
 
 /* ---------- Kesimpulan OEE ---------- */
-.oee-donut-row-3 { justify-content: space-around; }
+.oee-donut-row-3 { justify-content: space-around; flex-shrink: 0; }
 .oee-total-big {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  margin-top: 10px;
-  padding-top: 10px;
+  gap: 1px;
+  margin-top: 4px;
+  padding-top: 4px;
   border-top: 1px solid var(--border);
+  flex-shrink: 0;
 }
 .oee-total-big-value {
   font-family: var(--font-display);
-  font-size: 34px;
+  font-size: 26px;
   font-weight: 700;
   color: var(--primary);
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 .oee-total-big-label {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--muted);
   letter-spacing: 0.02em;
 }
 .oee-kesimpulan {
-  margin: 12px 0 0;
-  padding: 10px 12px;
-  font-size: 12px;
-  line-height: 1.5;
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  font-size: 11px;
+  line-height: 1.4;
   color: var(--muted);
   background: var(--panel-2);
-  border-radius: 8px;
+  border-radius: 6px;
   border-left: 3px solid var(--primary);
+  flex-shrink: 0;
 }
 [data-theme="dark"] .oee-kesimpulan { background: #0f172a; }
 
@@ -1629,13 +1632,13 @@ body, .sqcpm-col, .dash-panel, .kpi-card, .perf-card, .panel,
 
 /* ---------- TV: OEE breakdown di row-3 ---------- */
 @media (min-width: 1280px) and (min-aspect-ratio: 4/3) {
-  .tv-row-3 .oee-donut-row-3 { justify-content: space-around; gap: 8px; flex: 1; align-items: center; }
-  .tv-row-3 .oee-donut-wrap { width: 60px; height: 60px; }
+  .tv-row-3 .oee-donut-row-3 { justify-content: space-around; gap: 4px; flex: 1; align-items: center; }
+  .tv-row-3 .oee-donut-wrap { width: 50px; height: 50px; }
   .tv-row-3 .oee-donut-label { font-size: 9px; }
-  .oee-total-big { margin-top: 6px; padding-top: 6px; }
-  .oee-total-big-value { font-size: 28px; }
-  .oee-total-big-label { font-size: 10px; }
-  .oee-kesimpulan { margin-top: 6px; font-size: 11px; padding: 8px 10px; }
+  .oee-total-big { margin-top: 4px; padding-top: 4px; }
+  .oee-total-big-value { font-size: 22px; }
+  .oee-total-big-label { font-size: 9px; }
+  .oee-kesimpulan { margin-top: 4px; font-size: 10px; padding: 5px 8px; }
   /* tabel 10 terburuk: batasi supaya tidak melebihi tinggi baris */
   .tv-row-3 .table-wrap { max-height: 100%; }
 }
