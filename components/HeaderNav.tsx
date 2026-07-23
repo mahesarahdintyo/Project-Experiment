@@ -18,14 +18,20 @@ export default function HeaderNav({ children, activeTitle }: HeaderNavProps) {
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [userEmail, setUserEmail] = useState<string>("");
 
   useEffect(() => {
-    const savedTheme = (localStorage.getItem("theme_v1") as "light" | "dark") || "light";
+    const savedTheme = (localStorage.getItem("theme_v1") as "light" | "dark") || "dark";
     setTheme(savedTheme);
     document.documentElement.setAttribute("data-theme", savedTheme);
+
+    const handleThemeEvent = () => {
+      const current = (localStorage.getItem("theme_v1") as "light" | "dark") || "dark";
+      setTheme(current);
+    };
+    window.addEventListener("themeChange", handleThemeEvent);
 
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -40,6 +46,10 @@ export default function HeaderNav({ children, activeTitle }: HeaderNavProps) {
       }
     };
     checkUser();
+
+    return () => {
+      window.removeEventListener("themeChange", handleThemeEvent);
+    };
   }, []);
 
   const toggleTheme = () => {
@@ -47,6 +57,7 @@ export default function HeaderNav({ children, activeTitle }: HeaderNavProps) {
     setTheme(nextTheme);
     localStorage.setItem("theme_v1", nextTheme);
     document.documentElement.setAttribute("data-theme", nextTheme);
+    window.dispatchEvent(new Event("themeChange"));
   };
 
   const handleLogout = async () => {

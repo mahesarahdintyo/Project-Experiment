@@ -52,6 +52,28 @@ export default function DashboardPage() {
     overtime_jam: 0,
   });
 
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
+
+  useEffect(() => {
+    const saved = (localStorage.getItem("theme_v1") as "light" | "dark") || "dark";
+    setTheme(saved);
+
+    const handleThemeEvent = () => {
+      const current = (localStorage.getItem("theme_v1") as "light" | "dark") || "dark";
+      setTheme(current);
+    };
+    window.addEventListener("themeChange", handleThemeEvent);
+    return () => window.removeEventListener("themeChange", handleThemeEvent);
+  }, []);
+
+  const toggleTheme = () => {
+    const nextTheme = theme === "light" ? "dark" : "light";
+    setTheme(nextTheme);
+    localStorage.setItem("theme_v1", nextTheme);
+    document.documentElement.setAttribute("data-theme", nextTheme);
+    window.dispatchEvent(new Event("themeChange"));
+  };
+
   // Chart Canvas Refs
   const hourlyCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const fleetCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -474,6 +496,14 @@ export default function DashboardPage() {
             <input type="number" min="2000" max="2100" style={{ maxWidth: "100px" }}
               value={tahunPilih} onChange={(e) => setTahunPilih(Number(e.target.value))} />
           )}
+
+          <button
+            className="theme-toggle"
+            onClick={toggleTheme}
+            title={theme === "dark" ? "Ke mode terang" : "Ke mode gelap"}
+          >
+            <span>{theme === "dark" ? "☀️" : "🌙"}</span>
+          </button>
         </div>
       </div>
 
